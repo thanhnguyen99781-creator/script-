@@ -1,7 +1,7 @@
 --[[
-    Blox Fruits Script Hub — v4 LOGIC FIX
+    Blox Fruits Script Hub — v5 COMBAT FIX
     Author: [K]vk
-    Fix: Ground movement, enemy detection, chest scan, island rotation
+    Focus: Stand above enemy, proper attack, quest fix
 --]]
 
 local Players = game:GetService("Players")
@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local function getGuiParent()
     if gethui then return gethui() end
@@ -36,17 +37,6 @@ local islands = {
     {name = "Fountain City", minLv = 500, pos = Vector3.new(5133, 16, 4760)},
     {name = "Colosseum", minLv = 600, pos = Vector3.new(-3450, 16, -3700)},
 }
-
-local function getTargetIsland()
-    local myLv = getLevel()
-    local target = islands[1]
-    for _, island in ipairs(islands) do
-        if myLv >= island.minLv then
-            target = island
-        end
-    end
-    return target
-end
 
 -- ══ COLORS ══
 local C_BG = Color3.fromRGB(25, 25, 35)
@@ -100,7 +90,7 @@ Title.Font = Enum.Font.GothamBold
 Title.TextColor3 = C_ACCENT
 Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Text = "BLOX HUB — v4"
+Title.Text = "BLOX HUB — v5"
 Title.Parent = TitleBar
 
 local CloseBtn = Instance.new("TextButton")
@@ -290,7 +280,7 @@ local function createSlider(parent, text, min, max, default, callback, order)
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -20, 0, 20)
     lbl.Position = UDim2.new(0, 12, 0, 6)
-    lbl.BackgroundTransparency =  1
+    lbl.BackgroundTransparency = 1
     lbl.Font = Enum.Font.Gotham
     lbl.TextColor3 = C_TEXT
     lbl.TextSize = 12
@@ -421,40 +411,93 @@ local function getLevel()
     return 1
 end
 
--- CFrame teleport (instant, no flying)
-local function teleportTo(pos)
-    local root = getRoot()
-    if not root then return end
-    root.CFrame = CFrame.new(pos)
-end
-
--- Walk to position (ground movement)
-local function walkTo(pos, timeout)
-    timeout = timeout or 5
-    local hum = getHum()
-    local root = getRoot()
-    if not hum or not root then return false end
-    hum:MoveTo(pos)
-    local start = tick()
-    while tick() - start < timeout do
-        local r = getRoot()
-        if not r then return false end
-        local dist = (r.Position - pos).Magnitude
-        if dist < 5 then return true end
-        task.wait(0.1)
+local function getTargetIsland()
+    local myLv = getLevel()
+    local target = islands[1]
+    local idx = 1
+    for i, island in ipairs(islands) do
+        if myLv >= island.minLv then
+            target = island
+            idx = i
+        end
     end
-    return false
+    return target, idx
 end
 
--- ══ ENEMY DETECTION ══
+-- ══ VIRTUAL SERVICES ══
+local vUser, vInput
+pcall(function() vUser = game:GetService("VirtualUser") end)
+pcall(function() vInput = game:GetService("VirtualInputManager") end)
+
+-- ══ ATTACK FUNCTION (FIXED - STAND ABOVE HEAD) ══
+local function attackNPC(target)
+    if not target then return end
+    local hum = target:FindFirstChildOfClass("Humanoid")
+    local root = target:FindFirstChild("HumanoidRootPart") or target:FindFirstChild("Torso") or target:FindFirstChild("UpperTorso")
+    if not hum or not root or hum.Health <= 0 then return end
+
+    local myRoot = getRoot()
+    local myHum = getHum()
+    if not myRoot or not myHum or myHum.Health <= 0 then return end
+
+    -- TELEPORT ABOVE ENEMY HEAD (Y + 8 studs)
+    -- Enemy can't hit us, we can hit them
+    local abovePos = root.Position + Vector3.new(0, 8, 0)
+    myRoot.CFrame = CFrame.new(abovePos, root.Position)
+
+    -- Look down at enemy
+    myRoot.CFrame = CFrame.new(abovePos, Vector3.new(root.Position.X, abovePos.Y, root.Position.Z))
+
+    -- Click attack (VirtualUser - main attack method in Blox Fruits)
+    if vUser then
+        pcall(function()
+            vUser:CaptureController()
+            vUser:Button1Down(Vector2.new())
+            task.wait(0.05)
+            vUser:Button1Up(Vector2.new())
+        end)
+    end
+
+    -- Also activate tool if equipped
+    local tool = getChar():FindFirstChildOfClass("Tool")
+    if tool then
+        pcall(function() tool:Activate() end)
+    else
+        -- Equip first tool from backpack
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if bp then
+            for _, item in ipairs(bp:GetChildren()) do
+                if item:IsA("Tool") then
+                    pcall(function() myHum:EquipTool(item) end)
+                    task.wait(0.03)
+                    pcall(function() item:Activate() end)
+                    break
+                end
+            end
+        end
+    end
+
+    -- Skill attacks (Z, X, C, V, F)
+    if useSkill and vInput then
+        for _, key in ipairs({Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V, Enum.KeyCode.F}) do
+            pcall(function()
+                vInput:SendKeyEvent(true, key, false, game)
+                task.wait(0.03)
+                vInput:SendKeyEvent(false, key, false, game)
+            end)
+        end
+    end
+end
+
+-- ══ ENEMY DETECTION (FIXED) ══
 local function getBestNPC()
     local myLvl = getLevel()
     local root = getRoot()
     if not root then return nil end
 
-    local best, bestDist = nil, math.huge
+    local best, bestScore = nil, math.huge
 
-    -- Check Workspace.Enemies (Blox Fruits standard)
+    -- Blox Fruits stores enemies in multiple possible locations
     local containers = {
         Workspace:FindFirstChild("Enemies"),
         Workspace:FindFirstChild("Enemy"),
@@ -478,14 +521,19 @@ local function getBestNPC()
                                 el = tonumber(lvlObj.Text:match("%d+")) or 1
                             end
                         end
+                        -- Also check Humanoid name for level
+                        if el == 1 then
+                            local nameMatch = obj.Name:match("%[(%d+)%]")
+                            if nameMatch then el = tonumber(nameMatch) end
+                        end
 
                         -- Check level range
                         if el <= myLvl + levelRange and el >= myLvl - levelRange - 10 then
                             local d = (root.Position - r.Position).Magnitude
                             -- Prefer higher level enemies that are closer
                             local score = d - (el * 1.5)
-                            if score < bestDist then
-                                bestDist = score
+                            if score < bestScore then
+                                bestScore = score
                                 best = obj
                             end
                         end
@@ -495,7 +543,7 @@ local function getBestNPC()
         end
     end
 
-    -- If nothing in range, search wider (remove level restriction)
+    -- Fallback: search wider without level restriction
     if not best then
         for _, container in ipairs(containers) do
             if container then
@@ -505,8 +553,8 @@ local function getBestNPC()
                         local r = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso")
                         if hum and r and hum.Health > 0 and not Players:GetPlayerFromCharacter(obj) then
                             local d = (root.Position - r.Position).Magnitude
-                            if d < bestDist then
-                                bestDist = d
+                            if d < 500 and d < bestScore then
+                                bestScore = d
                                 best = obj
                             end
                         end
@@ -519,113 +567,39 @@ local function getBestNPC()
     return best
 end
 
--- ══ ATTACK NPC ══
-local vUser, vInput
-pcall(function() vUser = game:GetService("VirtualUser") end)
-pcall(function() vInput = game:GetService("VirtualInputManager") end)
-
-local function attackNPC(target)
-    if not target then return end
-    local hum = target:FindFirstChildOfClass("Humanoid")
-    local root = target:FindFirstChild("HumanoidRootPart") or target:FindFirstChild("Torso")
-    if not hum or not root or hum.Health <= 0 then return end
-
-    local myRoot = getRoot()
-    local myHum = getHum()
-    if not myRoot or not myHum then return end
-
-    local d = (myRoot.Position - root.Position).Magnitude
-
-    -- If far, teleport close (CFrame, not tween)
-    if d > 20 then
-        teleportTo(root.Position + Vector3.new(0, 5, 0))
-        task.wait(0.1)
-        return
-    end
-
-    -- If mid-range, walk to enemy
-    if d > 8 then
-        walkTo(root.Position, 2)
-        return
-    end
-
-    -- In attack range - face the enemy
-    myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(root.Position.X, myRoot.Position.Y, root.Position.Z))
-
-    -- Melee attack
-    if vUser then
-        pcall(function()
-            vUser:CaptureController()
-            vUser:Button1Down(Vector2.new())
-            task.wait(0.05)
-            vUser:Button1Up(Vector2.new())
-        end)
-    end
-
-    -- Tool attack
-    local tool = getChar():FindFirstChildOfClass("Tool")
-    if tool then
-        pcall(function() tool:Activate() end)
-    else
-        local bp = LocalPlayer:FindFirstChild("Backpack")
-        if bp then
-            for _, item in ipairs(bp:GetChildren()) do
-                if item:IsA("Tool") then
-                    pcall(function() myHum:EquipTool(item) end)
-                    task.wait(0.05)
-                    pcall(function() item:Activate() end)
-                    break
-                end
-            end
-        end
-    end
-
-    -- Skill attacks
-    if useSkill and vInput then
-        for _, key in ipairs({Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V, Enum.KeyCode.F}) do
-            pcall(function()
-                vInput:SendKeyEvent(true, key, false, game)
-                task.wait(0.05)
-                vInput:SendKeyEvent(false, key, false, game)
-            end)
-        end
-    end
-end
-
--- ══ QUEST SYSTEM ══
+-- ══ QUEST SYSTEM (COMPLETELY FIXED) ══
 local function getQuestGiver()
     local root = getRoot()
-    if not root then return nil end
+    if not root then return nil, nil end
 
-    -- Search for quest NPCs
+    -- Method 1: Search for NPC models with quest-related names
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") then
+        if obj:IsA("Model") and not Players:GetPlayerFromCharacter(obj) then
             local name = obj.Name:lower()
-            if name:match("quest") or name:match("giver") or name:match("npc") then
-                -- Skip player characters
-                if not Players:GetPlayerFromCharacter(obj) then
-                    local part = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("Part")
-                    if part then
-                        local d = (root.Position - part.Position).Magnitude
-                        if d < 2000 then
-                            return obj, part
-                        end
+            -- Blox Fruits quest NPCs
+            if name:match("quest") or name:match("giver") or name:match("npc") or name:match("snow") or name:match("marine") or name:match("pirate") or name:match("bandit") or name:match("monkey") or name:match("saber") then
+                local part = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("Part") or obj:FindFirstChild("Torso")
+                if part then
+                    local d = (root.Position - part.Position).Magnitude
+                    if d < 3000 then
+                        return obj, part
                     end
                 end
             end
         end
     end
 
-    -- Also check for ProximityPrompts with quest
+    -- Method 2: Search for ProximityPrompts
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("ProximityPrompt") then
-            local promptName = obj.ObjectText or ""
-            if promptName:lower():match("quest") or promptName:lower():match("nhiem") then
+            local promptName = (obj.ObjectText or ""):lower()
+            local action = (obj.ActionText or ""):lower()
+            if promptName:match("quest") or promptName:match("nhiem") or action:match("accept") or action:match("start") then
                 local parent = obj.Parent
                 local part = parent and (parent:FindFirstChildWhichIsA("Part") or parent:FindFirstChild("HumanoidRootPart"))
                 if part then
                     local d = (root.Position - part.Position).Magnitude
-                    if d < 2000 then
+                    if d < 3000 then
                         return parent, part
                     end
                 end
@@ -633,7 +607,7 @@ local function getQuestGiver()
         end
     end
 
-    return nil
+    return nil, nil
 end
 
 local function handleQuest()
@@ -645,33 +619,39 @@ local function handleQuest()
 
     local d = (root.Position - questPart.Position).Magnitude
 
-    -- Teleport close if far
-    if d > 50 then
-        teleportTo(questPart.Position + Vector3.new(0, 3, 0))
+    -- Teleport directly to quest giver
+    if d > 8 then
+        root.CFrame = CFrame.new(questPart.Position + Vector3.new(0, 3, 0))
         task.wait(0.2)
-        return
     end
 
-    -- Walk to quest giver
-    if d > 5 then
-        walkTo(questPart.Position, 3)
-        return
-    end
-
-    -- Accept quest via ProximityPrompt
+    -- Method 1: Fire ProximityPrompt
     local prompt = questGiver:FindFirstChildOfClass("ProximityPrompt") or questPart:FindFirstChildOfClass("ProximityPrompt")
     if prompt then
         pcall(function() fireproximityprompt(prompt) end)
         task.wait(0.3)
     end
 
-    -- Also try remote (Blox Fruits specific)
-    pcall(function()
-        game:GetService("ReplicatedStorage").Remotes.Communicator:InvokeServer("StartQuest")
-    end)
-    pcall(function()
-        game:GetService("ReplicatedStorage").Remotes.Communicator:InvokeServer("AcceptQuest")
-    end)
+    -- Method 2: Try Blox Fruits remotes
+    local comm = ReplicatedStorage:FindFirstChild("Remotes")
+    if comm then
+        local communicator = comm:FindFirstChild("Communicator")
+        if communicator then
+            pcall(function() communicator:InvokeServer("StartQuest") end)
+            pcall(function() communicator:InvokeServer("AcceptQuest") end)
+            pcall(function() communicator:FireServer("StartQuest") end)
+            pcall(function() communicator:FireServer("AcceptQuest") end)
+        end
+    end
+
+    -- Method 3: Try touching the quest NPC
+    if questPart then
+        pcall(function()
+            firetouchinterest(root, questPart, 0)
+            task.wait(0.1)
+            firetouchinterest(root, questPart, 1)
+        end)
+    end
 end
 
 -- ══ ISLAND ROTATION ══
@@ -680,24 +660,15 @@ local function checkIslandRotation()
     if not autoIsland then return end
 
     local myLv = getLevel()
-    local target = getTargetIsland()
+    local target, idx = getTargetIsland()
     local root = getRoot()
     if not root then return end
 
-    -- Check if we need to move to a new island
-    local shouldChange = false
-    for i, island in ipairs(islands) do
-        if i > currentIslandIdx and myLv >= island.minLv then
-            shouldChange = true
-            currentIslandIdx = i
-        end
-    end
-
-    if shouldChange then
+    if idx > currentIslandIdx then
         StatusBar.Text = " Dang chuyen dao: " .. target.name .. "..."
-        teleportTo(target.pos)
+        currentIslandIdx = idx
+        root.CFrame = CFrame.new(target.pos)
         task.wait(1)
-        -- Accept quest on new island
         if autoQuest then
             handleQuest()
             task.wait(0.5)
@@ -706,13 +677,13 @@ local function checkIslandRotation()
     end
 end
 
--- ══ CHEST DETECTION (FIXED) ══
+-- ══ CHEST SYSTEM (FIXED) ══
 local function getAllChests()
     local chests = {}
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if (obj:IsA("Model") or obj:IsA("Part")) then
             local name = obj.Name:lower()
-            if name:match("chest") or name:match("ruong") or name:match("box") or name:match("crate") then
+            if name:match("chest") or name:match("ruong") or name:match("box") or name:match("crate") or name:match("treasure") then
                 local part = obj:IsA("Part") and obj or obj:FindFirstChildWhichIsA("Part")
                 if part then
                     local root = getRoot()
@@ -724,22 +695,20 @@ local function getAllChests()
             end
         end
     end
-
-    -- Sort by distance
     table.sort(chests, function(a, b) return a.dist < b.dist end)
     return chests
 end
 
--- ══ FARM LOOP ══
+-- ══ FARM LOOP (FIXED) ══
 task.spawn(function()
-    while task.wait(0.15) do
+    while task.wait(0.1) do
         if autoFarm then
             pcall(function()
                 local root = getRoot()
                 local hum = getHum()
                 if not root or not hum or hum.Health <= 0 then return end
 
-                -- Check island rotation first
+                -- Check island rotation
                 checkIslandRotation()
 
                 -- Handle quest
@@ -754,11 +723,11 @@ task.spawn(function()
                     StatusBar.Text = " Dang farm: " .. npcName
                     attackNPC(npc)
                 else
-                    StatusBar.Text = " Khong tim thay NPC, dang tim..."
-                    -- Walk around to find enemies
+                    StatusBar.Text = " Dang tim NPC..."
+                    -- Move to island center to find enemies
                     local island = getTargetIsland()
-                    teleportTo(island.pos + Vector3.new(math.random(-50, 50), 10, math.random(-50, 50)))
-                    task.wait(0.5)
+                    root.CFrame = CFrame.new(island.pos + Vector3.new(math.random(-30, 30), 20, math.random(-30, 30)))
+                    task.wait(0.3)
                 end
             end)
         end
@@ -775,35 +744,32 @@ task.spawn(function()
 
                 local chests = getAllChests()
                 if #chests > 0 then
-                    local chest = chests[1] -- Nearest chest
-                    local d = (root.Position - chest.part.Position).Magnitude
+                    local chest = chests[1]
+                    StatusBar.Text = " Dang mo ruong... (" .. #chests .. " ruong)"
 
-                    StatusBar.Text = " Dang tim ruong... (" .. #chests .. " tim thay)"
+                    -- Teleport directly into chest
+                    root.CFrame = CFrame.new(chest.part.Position)
+                    task.wait(0.2)
 
-                    -- Teleport to chest if far
-                    if d > 10 then
-                        teleportTo(chest.part.Position + Vector3.new(0, 3, 0))
-                        task.wait(0.3)
-                    end
-
-                    -- Collect chest
+                    -- Fire prompt
                     local prompt = chest.model:FindFirstChildOfClass("ProximityPrompt") or chest.part:FindFirstChildOfClass("ProximityPrompt")
                     if prompt then
                         pcall(function() fireproximityprompt(prompt) end)
-                    else
-                        -- Touch chest
-                        pcall(function()
-                            root.CFrame = CFrame.new(chest.part.Position)
-                            task.wait(0.3)
-                        end)
                     end
+
+                    -- Touch
+                    pcall(function()
+                        firetouchinterest(root, chest.part, 0)
+                        task.wait(0.1)
+                        firetouchinterest(root, chest.part, 1)
+                    end)
 
                     chestCount = chestCount + 1
                     chestLbl.Text = "Ruong da thu: " .. tostring(chestCount)
                     StatusBar.Text = " Da thu ruong #" .. chestCount
                     task.wait(0.5)
                 else
-                    StatusBar.Text = " Khong con ruong, dang cho respawn..."
+                    StatusBar.Text = " Khong con ruong, dang cho..."
                     task.wait(2)
                 end
             end)
@@ -895,10 +861,10 @@ end)
 -- ══ INIT ══
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Blox Hub v4",
-        Text = "Script loaded! Fix movement, chest, island rotation!",
+        Title = "Blox Hub v5",
+        Text = "Loaded! Stand above enemy, fixed quest & chest!",
         Duration = 4
     })
 end)
 
-print("[Blox Hub v4] Loaded successfully!")
+print("[Blox Hub v5] Loaded successfully!")
