@@ -1,7 +1,7 @@
 --[[
-    Blox Fruits Script Hub — FIXED VERSION
+    Blox Fruits Script Hub — v3 FIXED
     Author: [K]vk
-    Fix: GUI render, tab visibility, canvas size
+    Fix: Removed ScrollingFrame, fixed parent, manual sizing
 --]]
 
 local Players = game:GetService("Players")
@@ -10,70 +10,118 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
-local CoreGui = game:GetService("CoreGui")
 
-local old = CoreGui:FindFirstChild("BloxHub")
-if old then old:Destroy() end
+-- Fix parent (gethui hoặc CoreGui hoặc PlayerGui)
+local function getGuiParent()
+    if gethui then return gethui() end
+    local cg = game:GetService("CoreGui")
+    if cg then return cg end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Xóa GUI cũ
+local parent = getGuiParent()
+for _, v in ipairs(parent:GetChildren()) do
+    if v.Name == "BloxHub" then v:Destroy() end
+end
+
+-- ══ COLORS ══
+local C_BG = Color3.fromRGB(25, 25, 35)
+local C_TITLE = Color3.fromRGB(15, 15, 25)
+local C_TAB = Color3.fromRGB(35, 35, 50)
+local C_TAB_SEL = Color3.fromRGB(55, 85, 210)
+local C_ITEM = Color3.fromRGB(30, 30, 45)
+local C_TEXT = Color3.fromRGB(230, 230, 245)
+local C_TEXT_DIM = Color3.fromRGB(160, 170, 200)
+local C_ACCENT = Color3.fromRGB(100, 130, 255)
+local C_TOGGLE_OFF = Color3.fromRGB(50, 50, 65)
+local C_TOGGLE_ON = Color3.fromRGB(60, 180, 100)
 
 -- ══ GUI ══
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "BloxHub"
-ScreenGui.Parent = CoreGui
+ScreenGui.Parent = parent
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.IgnoreGuiInset = true
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 460, 0, 360)
-MainFrame.Position = UDim2.new(0.5, -230, 0.5, -180)
-MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+MainFrame.Size = UDim2.new(0, 480, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -240, 0.5, -190)
+MainFrame.BackgroundColor3 = C_BG
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = ScreenGui
 
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
-local stroke = Instance.new("UIStroke", MainFrame)
-stroke.Color = Color3.fromRGB(70, 100, 230)
-stroke.Thickness = 2
+local mCorner = Instance.new("UICorner")
+mCorner.CornerRadius = UDim.new(0, 10)
+mCorner.Parent = MainFrame
 
--- Title
+local mStroke = Instance.new("UIStroke")
+mStroke.Color = C_ACCENT
+mStroke.Thickness = 2
+mStroke.Parent = MainFrame
+
+-- Title Bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 40)
-TitleBar.BackgroundColor3 = Color3.fromRGB(12, 12, 22)
+TitleBar.BackgroundColor3 = C_TITLE
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
-Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
+
+local tCorner = Instance.new("UICorner")
+tCorner.CornerRadius = UDim.new(0, 10)
+tCorner.Parent = TitleBar
+
+-- Fill bottom corners of title bar
+local tFill = Instance.new("Frame")
+tFill.Size = UDim2.new(1, 0, 0, 10)
+tFill.Position = UDim2.new(0, 0, 1, -10)
+tFill.BackgroundColor3 = C_TITLE
+tFill.BorderSizePixel = 0
+tFill.Parent = TitleBar
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -50, 1, 0)
 Title.Position = UDim2.new(0, 14, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Font = Enum.Font.GothamBold
-Title.TextColor3 = Color3.fromRGB(100, 130, 255)
-Title.TextSize = 15
+Title.TextColor3 = C_ACCENT
+Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Text = "⚔️ BLOX HUB"
+Title.Text = "BLOX HUB — Blox Fruits"
 Title.Parent = TitleBar
 
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 28, 0, 28)
-CloseBtn.Position = UDim2.new(1, -34, 0, 6)
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -36, 0, 5)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseBtn.Text = "✕"
+CloseBtn.Text = "X"
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextSize = 13
+CloseBtn.TextSize = 14
 CloseBtn.Parent = TitleBar
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+
+local cCorner = Instance.new("UICorner")
+cCorner.CornerRadius = UDim.new(0, 6)
+cCorner.Parent = CloseBtn
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
 
 -- Drag
 local dragging, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true; dragStart = input.Position; startPos = MainFrame.Position
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
     end
 end)
-TitleBar.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
@@ -82,9 +130,9 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Tab Buttons
+-- Tab Bar Container
 local TabBar = Instance.new("Frame")
-TabBar.Size = UDim2.new(1, -10, 0, 34)
+TabBar.Size = UDim2.new(1, -10, 0, 36)
 TabBar.Position = UDim2.new(0, 5, 0, 42)
 TabBar.BackgroundTransparency = 1
 TabBar.Parent = MainFrame
@@ -92,37 +140,38 @@ TabBar.Parent = MainFrame
 local TabList = Instance.new("UIListLayout")
 TabList.FillDirection = Enum.FillDirection.Horizontal
 TabList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-TabList.Padding = UDim.new(0, 5)
+TabList.VerticalAlignment = Enum.VerticalAlignment.Center
+TabList.Padding = UDim.new(0, 6)
 TabList.Parent = TabBar
 
--- Content
+-- Content Container (dùng Frame thường, KHÔNG dùng ScrollingFrame)
 local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1, -10, 1, -85)
-Content.Position = UDim2.new(0, 5, 0, 80)
+Content.Size = UDim2.new(1, -20, 1, -90)
+Content.Position = UDim2.new(0, 10, 0, 82)
 Content.BackgroundTransparency = 1
 Content.Parent = MainFrame
 
 -- ══ TAB SYSTEM ══
 local tabs = {}
+
 local function createTab(name)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 140, 0, 30)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 48)
+    btn.Size = UDim2.new(0, 145, 0, 30)
+    btn.BackgroundColor3 = C_TAB
     btn.Text = name
     btn.Font = Enum.Font.GothamSemibold
-    btn.TextColor3 = Color3.fromRGB(150, 160, 200)
+    btn.TextColor3 = C_TEXT_DIM
     btn.TextSize = 13
     btn.AutoButtonColor = false
     btn.Parent = TabBar
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    local bCorner = Instance.new("UICorner")
+    bCorner.CornerRadius = UDim.new(0, 6)
+    bCorner.Parent = btn
 
-    local page = Instance.new("ScrollingFrame")
+    -- Dùng Frame thường thay vì ScrollingFrame
+    local page = Instance.new("Frame")
     page.Size = UDim2.new(1, 0, 1, 0)
     page.BackgroundTransparency = 1
-    page.ScrollBarThickness = 4
-    page.ScrollBarImageColor3 = Color3.fromRGB(80, 100, 220)
-    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    page.CanvasSize = UDim2.new(0, 0, 0, 0)
     page.Visible = false
     page.Parent = Content
 
@@ -132,33 +181,34 @@ local function createTab(name)
     layout.Parent = page
 
     local pad = Instance.new("UIPadding")
-    pad.PaddingTop = UDim.new(0, 4)
+    pad.PaddingTop = UDim.new(0, 2)
     pad.PaddingLeft = UDim.new(0, 2)
     pad.PaddingRight = UDim.new(0, 2)
     pad.Parent = page
 
-    local function select()
+    local function selectTab()
         for _, t in ipairs(tabs) do
-            t.btn.BackgroundColor3 = Color3.fromRGB(30, 30, 48)
-            t.btn.TextColor3 = Color3.fromRGB(150, 160, 200)
+            t.btn.BackgroundColor3 = C_TAB
+            t.btn.TextColor3 = C_TEXT_DIM
             t.page.Visible = false
         end
-        btn.BackgroundColor3 = Color3.fromRGB(60, 90, 210)
+        btn.BackgroundColor3 = C_TAB_SEL
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         page.Visible = true
     end
-    btn.MouseButton1Click:Connect(select)
-    table.insert(tabs, {btn = btn, page = page, select = select})
+
+    btn.MouseButton1Click:Connect(selectTab)
+    table.insert(tabs, {btn = btn, page = page, select = selectTab})
     return page
 end
 
--- ══ UI BUILDERS ══
+-- ══ UI HELPERS ══
 local function createLabel(parent, text, order)
     local l = Instance.new("TextLabel")
     l.Size = UDim2.new(1, 0, 0, 22)
     l.BackgroundTransparency = 1
     l.Font = Enum.Font.GothamBold
-    l.TextColor3 = Color3.fromRGB(100, 130, 255)
+    l.TextColor3 = C_ACCENT
     l.TextSize = 12
     l.TextXAlignment = Enum.TextXAlignment.Left
     l.Text = text
@@ -169,197 +219,196 @@ end
 
 local function createToggle(parent, text, callback, order)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 0, 38)
-    f.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    f.Size = UDim2.new(1, 0, 0, 40)
+    f.BackgroundColor3 = C_ITEM
     f.BorderSizePixel = 0
     f.LayoutOrder = order or 0
     f.Parent = parent
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
+    local fCorner = Instance.new("UICorner")
+    fCorner.CornerRadius = UDim.new(0, 6)
+    fCorner.Parent = f
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -60, 1, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.Position = UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Font = Enum.Font.Gotham
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 240)
-    lbl.TextSize = 12
+    lbl.TextColor3 = C_TEXT
+    lbl.TextSize = 13
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Text = text
     lbl.Parent = f
 
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 44, 0, 22)
-    btn.Position = UDim2.new(1, -52, 0.5, -11)
-    btn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-    btn.Text = ""
-    btn.Parent = f
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 46, 0, 24)
+    toggleBtn.Position = UDim2.new(1, -54, 0.5, -12)
+    toggleBtn.BackgroundColor3 = C_TOGGLE_OFF
+    toggleBtn.Text = ""
+    toggleBtn.AutoButtonColor = false
+    toggleBtn.Parent = f
+    local tCorner = Instance.new("UICorner")
+    tCorner.CornerRadius = UDim.new(1, 0)
+    tCorner.Parent = toggleBtn
 
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 18, 0, 18)
-    knob.Position = UDim2.new(0, 2, 0.5, -9)
-    knob.BackgroundColor3 = Color3.fromRGB(190, 190, 200)
-    knob.Parent = btn
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    knob.Position = UDim2.new(0, 3, 0.5, -9)
+    knob.BackgroundColor3 = Color3.fromRGB(200, 200, 210)
+    knob.Parent = toggleBtn
+    local kCorner = Instance.new("UICorner")
+    kCorner.CornerRadius = UDim.new(1, 0)
+    kCorner.Parent = knob
 
     local on = false
-    btn.MouseButton1Click:Connect(function()
+    toggleBtn.MouseButton1Click:Connect(function()
         on = not on
         if on then
-            TweenService:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(1, -20, 0.5, -9)}):Play()
-            btn.BackgroundColor3 = Color3.fromRGB(60, 130, 220)
+            TweenService:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(1, -21, 0.5, -9)}):Play()
+            toggleBtn.BackgroundColor3 = C_TOGGLE_ON
             knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         else
-            TweenService:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(0, 2, 0.5, -9)}):Play()
-            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-            knob.BackgroundColor3 = Color3.fromRGB(190, 190, 200)
+            TweenService:Create(knob, TweenInfo.new(0.15), {Position = UDim2.new(0, 3, 0.5, -9)}):Play()
+            toggleBtn.BackgroundColor3 = C_TOGGLE_OFF
+            knob.BackgroundColor3 = Color3.fromRGB(200, 200, 210)
         end
-        callback(on)
+        if callback then callback(on) end
     end)
     return f
 end
 
 local function createSlider(parent, text, min, max, default, callback, order)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1, 0, 0, 50)
-    f.BackgroundColor3 = Color3.fromRGB(28, 28, 42)
+    f.Size = UDim2.new(1, 0, 0, 52)
+    f.BackgroundColor3 = C_ITEM
     f.BorderSizePixel = 0
     f.LayoutOrder = order or 0
     f.Parent = parent
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
+    local fCorner = Instance.new("UICorner")
+    fCorner.CornerRadius = UDim.new(0, 6)
+    fCorner.Parent = f
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -20, 0, 20)
-    lbl.Position = UDim2.new(0, 10, 0, 4)
+    lbl.Position = UDim2.new(0, 12, 0, 6)
     lbl.BackgroundTransparency = 1
     lbl.Font = Enum.Font.Gotham
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 240)
+    lbl.TextColor3 = C_TEXT
     lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Text = text .. ": " .. tostring(default)
     lbl.Parent = f
 
     local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(1, -20, 0, 6)
-    bar.Position = UDim2.new(0, 10, 0, 32)
-    bar.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    bar.Size = UDim2.new(1, -24, 0, 8)
+    bar.Position = UDim2.new(0, 12, 0, 34)
+    bar.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
     bar.BorderSizePixel = 0
     bar.Parent = f
-    Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+    local bCorner = Instance.new("UICorner")
+    bCorner.CornerRadius = UDim.new(1, 0)
+    bCorner.Parent = bar
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(60, 130, 220)
+    fill.BackgroundColor3 = C_ACCENT
     fill.BorderSizePixel = 0
     fill.Parent = bar
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = fill
 
-    local drag = false
-    local function upd(x)
-        local r = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-        local v = math.floor(min + (max - min) * r)
-        fill.Size = UDim2.new(r, 0, 1, 0)
-        lbl.Text = text .. ": " .. tostring(v)
-        callback(v)
+    local sld = false
+    local function update(x)
+        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        local val = math.floor(min + (max - min) * rel)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        lbl.Text = text .. ": " .. tostring(val)
+        if callback then callback(val) end
     end
+
     bar.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            drag = true; upd(i.Position.X)
+            sld = true
+            update(i.Position.X)
         end
     end)
     UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then drag = false end
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            sld = false
+        end
     end)
     UserInputService.InputChanged:Connect(function(i)
-        if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then upd(i.Position.X) end
+        if sld and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            update(i.Position.X)
+        end
     end)
     return f
 end
 
--- ══ TAB: AUTO FARM ══
-local farmTab = createTab("⚔️ Auto Farm")
+-- ══ BUILD TABS ══
+local farmTab = createTab("Auto Farm")
+local chestTab = createTab("Auto Chest")
+local flyTab = createTab("Fly")
 
-createLabel(farmTab, "── COMBAT ──", 1)
+-- ══ AUTO FARM TAB ══
+createLabel(farmTab, "-- COMBAT --", 1)
 
 local autoFarm = false
 local autoQuest = false
 local useSkill = false
 local levelRange = 20
 
-createToggle(farmTab, "Auto Farm (Tìm & đánh NPC)", function(s)
-    autoFarm = s
-end, 2)
+createToggle(farmTab, "Auto Farm (Tim & danh NPC)", function(s) autoFarm = s end, 2)
+createToggle(farmTab, "Auto Quest (Nhan & hoan thanh)", function(s) autoQuest = s end, 3)
+createToggle(farmTab, "Auto XP & Beli", function(s) autoFarm = s end, 4)
 
-createToggle(farmTab, "Auto Quest (Nhận & hoàn thành)", function(s)
-    autoQuest = s
-end, 3)
+createLabel(farmTab, "-- SETTINGS --", 5)
+createSlider(farmTab, "Level Range (+/-)", 5, 50, 20, function(v) levelRange = v end, 6)
+createToggle(farmTab, "Dung Skill thay vi Melee", function(s) useSkill = s end, 7)
 
-createToggle(farmTab, "Auto XP & Beli", function(s)
-    autoFarm = s
-end, 4)
-
-createLabel(farmTab, "── SETTINGS ──", 5)
-
-createSlider(farmTab, "Level Range (±)", 5, 50, 20, function(v)
-    levelRange = v
-end, 6)
-
-createToggle(farmTab, "Dùng Skill thay vì Melee", function(s)
-    useSkill = s
-end, 7)
-
--- ══ TAB: AUTO CHEST ══
-local chestTab = createTab("📦 Auto Chest")
-
-createLabel(chestTab, "── CHEST FARMING ──", 1)
+-- ══ AUTO CHEST TAB ══
+createLabel(chestTab, "-- CHEST FARMING --", 1)
 
 local autoChest = false
 local chestCount = 0
 
-createToggle(chestTab, "Auto Chest (Quét & thu thập)", function(s)
+createToggle(chestTab, "Auto Chest (Quet & thu thap)", function(s)
     autoChest = s
     if s then chestCount = 0 end
 end, 2)
 
 local chestLbl = Instance.new("TextLabel")
-chestLbl.Size = UDim2.new(1, 0, 0, 22)
+chestLbl.Size = UDim2.new(1, 0, 0, 24)
 chestLbl.BackgroundTransparency = 1
 chestLbl.Font = Enum.Font.Gotham
-chestLbl.TextColor3 = Color3.fromRGB(180, 190, 210)
-chestLbl.TextSize = 11
+chestLbl.TextColor3 = C_TEXT_DIM
+chestLbl.TextSize = 12
 chestLbl.TextXAlignment = Enum.TextXAlignment.Left
-chestLbl.Text = "Rương đã thu: 0"
+chestLbl.Text = "Ruong da thu: 0"
 chestLbl.LayoutOrder = 3
 chestLbl.Parent = chestTab
 
--- ══ TAB: FLY ══
-local flyTab = createTab("🪽 Fly")
-
-createLabel(flyTab, "── FLIGHT CONTROL ──", 1)
+-- ══ FLY TAB ══
+createLabel(flyTab, "-- FLIGHT CONTROL --", 1)
 
 local flyOn = false
 local flySpeed = 50
 
-createToggle(flyTab, "Bật Fly (WASD + Space/Ctrl)", function(s)
-    flyOn = s
-end, 2)
+createToggle(flyTab, "Bat Fly (WASD + Space/Ctrl)", function(s) flyOn = s end, 2)
+createSlider(flyTab, "Toc do bay", 10, 300, 50, function(v) flySpeed = v end, 3)
 
-createSlider(flyTab, "Tốc độ bay", 10, 300, 50, function(v)
-    flySpeed = v
-end, 3)
-
-createLabel(flyTab, "── HƯỚNG DẪN ──", 4)
+createLabel(flyTab, "-- HUONG DAN --", 4)
 
 local guide = Instance.new("TextLabel")
-guide.Size = UDim2.new(1, 0, 0, 70)
+guide.Size = UDim2.new(1, 0, 0, 80)
 guide.BackgroundTransparency = 1
 guide.Font = Enum.Font.Gotham
-guide.TextColor3 = Color3.fromRGB(160, 170, 200)
-guide.TextSize = 11
+guide.TextColor3 = C_TEXT_DIM
+guide.TextSize = 12
 guide.TextWrapped = true
 guide.TextXAlignment = Enum.TextXAlignment.Left
 guide.TextYAlignment = Enum.TextYAlignment.Top
-guide.Text = "W: Tiến | S: Lùi\nA: Trái | D: Phải\nSpace: Lên | Ctrl: Xuống\n💡 Tăng tốc độ nếu bị lag"
+guide.Text = "W: Tien | S: Lui\nA: Trai | D: Phai\nSpace: Len | Ctrl: Xuong\nTang toc do neu bi lag"
 guide.LayoutOrder = 5
 guide.Parent = flyTab
 
@@ -370,23 +419,19 @@ tabs[1].select()
 local function getChar()
     return LocalPlayer.Character
 end
-
 local function getRoot()
     local c = getChar()
     return c and c:FindFirstChild("HumanoidRootPart")
 end
-
 local function getHum()
     local c = getChar()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
-
 local function getLevel()
     local d = LocalPlayer:FindFirstChild("Data")
     if d and d:FindFirstChild("Level") then return d.Level.Value end
     return 1
 end
-
 local function tweenTo(pos, speed)
     speed = speed or 200
     local root = getRoot()
@@ -436,7 +481,6 @@ local function getNearestChest()
     return best
 end
 
--- VirtualUser/Input
 local vUser, vInput
 pcall(function() vUser = game:GetService("VirtualUser") end)
 pcall(function() vInput = game:GetService("VirtualInputManager") end)
@@ -449,17 +493,13 @@ local function attackNPC(target)
     local myRoot = getRoot()
     local myHum = getHum()
     if not myRoot or not myHum then return end
-
     local d = (myRoot.Position - root.Position).Magnitude
     if d > 12 then
         tweenTo(root.Position + Vector3.new(0, 5, 0), 250)
         task.wait(0.1)
         return
     end
-
     myRoot.CFrame = CFrame.lookAt(myRoot.Position, root.Position)
-
-    -- Melee
     if vUser then
         pcall(function()
             vUser:CaptureController()
@@ -468,8 +508,6 @@ local function attackNPC(target)
             vUser:Button1Up(Vector2.new())
         end)
     end
-
-    -- Tool attack
     local tool = getChar():FindFirstChildOfClass("Tool")
     if tool then
         pcall(function() tool:Activate() end)
@@ -486,8 +524,6 @@ local function attackNPC(target)
             end
         end
     end
-
-    -- Skills
     if useSkill and vInput then
         for _, key in ipairs({Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C}) do
             pcall(function()
@@ -526,7 +562,7 @@ local function handleQuest()
     end
 end
 
--- ══ FARM LOOP ══
+-- ══ LOOPS ══
 task.spawn(function()
     while task.wait(0.1) do
         if autoFarm then
@@ -539,7 +575,6 @@ task.spawn(function()
     end
 end)
 
--- ══ CHEST LOOP ══
 task.spawn(function()
     while task.wait(0.3) do
         if autoChest then
@@ -562,7 +597,7 @@ task.spawn(function()
                             pcall(function() root.CFrame = CFrame.new(p.Position); task.wait(0.3) end)
                         end
                         chestCount = chestCount + 1
-                        chestLbl.Text = "Rương đã thu: " .. tostring(chestCount)
+                        chestLbl.Text = "Ruong da thu: " .. tostring(chestCount)
                         task.wait(0.5)
                     end
                 end
@@ -571,7 +606,7 @@ task.spawn(function()
     end
 end)
 
--- ══ FLY SYSTEM ══
+-- ══ FLY ══
 local flyVel, flyGyro
 local keys = {W=false, A=false, S=false, D=false, Space=false, Ctrl=false}
 
@@ -607,7 +642,6 @@ RunService.RenderStepped:Connect(function()
         local root = getRoot()
         local hum = getHum()
         if not root or not hum or hum.Health <= 0 then return end
-
         if not flyVel or not flyVel.Parent then
             flyVel = Instance.new("BodyVelocity")
             flyVel.MaxForce = Vector3.new(1, 1, 1) * math.huge
@@ -621,26 +655,22 @@ RunService.RenderStepped:Connect(function()
             flyGyro.CFrame = root.CFrame
             flyGyro.Parent = root
         end
-
         local cam = Workspace.CurrentCamera
         local look = cam.CFrame.LookVector
         local right = cam.CFrame.RightVector
         local move = Vector3.zero
-
         if keys.W then move = move + look end
         if keys.S then move = move - look end
         if keys.A then move = move - right end
         if keys.D then move = move + right end
         if keys.Space then move = move + Vector3.new(0, 1, 0) end
         if keys.Ctrl then move = move + Vector3.new(0, -1, 0) end
-
         if move.Magnitude > 0 then move = move.Unit * flySpeed end
         flyVel.Velocity = move
         flyGyro.CFrame = cam.CFrame
     end)
 end)
 
--- Respawn cleanup
 LocalPlayer.CharacterAdded:Connect(function()
     if flyVel then flyVel:Destroy(); flyVel = nil end
     if flyGyro then flyGyro:Destroy(); flyGyro = nil end
@@ -661,7 +691,9 @@ end)
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Blox Hub",
-        Text = "Script loaded thành công!",
+        Text = "Script loaded thanh cong!",
         Duration = 3
     })
 end)
+
+print("[Blox Hub] Loaded successfully!")
