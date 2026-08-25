@@ -1,7 +1,7 @@
 --[[
-    Blox Fruits Script Hub — v3 FIXED
+    Blox Fruits Script Hub — v4 LOGIC FIX
     Author: [K]vk
-    Fix: Removed ScrollingFrame, fixed parent, manual sizing
+    Fix: Ground movement, enemy detection, chest scan, island rotation
 --]]
 
 local Players = game:GetService("Players")
@@ -11,7 +11,6 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
--- Fix parent (gethui hoặc CoreGui hoặc PlayerGui)
 local function getGuiParent()
     if gethui then return gethui() end
     local cg = game:GetService("CoreGui")
@@ -19,10 +18,34 @@ local function getGuiParent()
     return LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Xóa GUI cũ
 local parent = getGuiParent()
 for _, v in ipairs(parent:GetChildren()) do
     if v.Name == "BloxHub" then v:Destroy() end
+end
+
+-- ══ ISLAND DATA ══
+local islands = {
+    {name = "Starter Island", minLv = 1, pos = Vector3.new(1076, 16, 1346)},
+    {name = "Jungle", minLv = 10, pos = Vector3.new(-1212, 16, 1032)},
+    {name = "Pirate Village", minLv = 50, pos = Vector3.new(-1148, 16, -388)},
+    {name = "Desert", minLv = 100, pos = Vector3.new(136, 16, -588)},
+    {name = "Frozen Village", minLv = 150, pos = Vector3.new(1097, 16, -1290)},
+    {name = "Marine Fortress", minLv = 200, pos = Vector3.new(-438, 16, -1800)},
+    {name = "Sky Island", minLv = 250, pos = Vector3.new(-4850, 300, -720)},
+    {name = "Prison", minLv = 350, pos = Vector3.new(5300, 16, 4760)},
+    {name = "Fountain City", minLv = 500, pos = Vector3.new(5133, 16, 4760)},
+    {name = "Colosseum", minLv = 600, pos = Vector3.new(-3450, 16, -3700)},
+}
+
+local function getTargetIsland()
+    local myLv = getLevel()
+    local target = islands[1]
+    for _, island in ipairs(islands) do
+        if myLv >= island.minLv then
+            target = island
+        end
+    end
+    return target
 end
 
 -- ══ COLORS ══
@@ -46,33 +69,22 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 480, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -240, 0.5, -190)
+MainFrame.Size = UDim2.new(0, 480, 0, 400)
+MainFrame.Position = UDim2.new(0.5, -240, 0.5, -200)
 MainFrame.BackgroundColor3 = C_BG
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = ScreenGui
-
-local mCorner = Instance.new("UICorner")
-mCorner.CornerRadius = UDim.new(0, 10)
-mCorner.Parent = MainFrame
-
-local mStroke = Instance.new("UIStroke")
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+local mStroke = Instance.new("UIStroke", MainFrame)
 mStroke.Color = C_ACCENT
 mStroke.Thickness = 2
-mStroke.Parent = MainFrame
 
--- Title Bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 40)
 TitleBar.BackgroundColor3 = C_TITLE
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
-
-local tCorner = Instance.new("UICorner")
-tCorner.CornerRadius = UDim.new(0, 10)
-tCorner.Parent = TitleBar
-
--- Fill bottom corners of title bar
+Instance.new("UICorner", TitleBar).CornerRadius = UDim.new(0, 10)
 local tFill = Instance.new("Frame")
 tFill.Size = UDim2.new(1, 0, 0, 10)
 tFill.Position = UDim2.new(0, 0, 1, -10)
@@ -88,7 +100,7 @@ Title.Font = Enum.Font.GothamBold
 Title.TextColor3 = C_ACCENT
 Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Text = "BLOX HUB — Blox Fruits"
+Title.Text = "BLOX HUB — v4"
 Title.Parent = TitleBar
 
 local CloseBtn = Instance.new("TextButton")
@@ -100,28 +112,18 @@ CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.TextSize = 14
 CloseBtn.Parent = TitleBar
-
-local cCorner = Instance.new("UICorner")
-cCorner.CornerRadius = UDim.new(0, 6)
-cCorner.Parent = CloseBtn
-
-CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
 -- Drag
 local dragging, dragStart, startPos
 TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
+        dragging = true; dragStart = input.Position; startPos = MainFrame.Position
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
@@ -130,13 +132,12 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Tab Bar Container
+-- Tab Bar
 local TabBar = Instance.new("Frame")
 TabBar.Size = UDim2.new(1, -10, 0, 36)
 TabBar.Position = UDim2.new(0, 5, 0, 42)
 TabBar.BackgroundTransparency = 1
 TabBar.Parent = MainFrame
-
 local TabList = Instance.new("UIListLayout")
 TabList.FillDirection = Enum.FillDirection.Horizontal
 TabList.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -144,16 +145,29 @@ TabList.VerticalAlignment = Enum.VerticalAlignment.Center
 TabList.Padding = UDim.new(0, 6)
 TabList.Parent = TabBar
 
--- Content Container (dùng Frame thường, KHÔNG dùng ScrollingFrame)
+-- Status Bar
+local StatusBar = Instance.new("TextLabel")
+StatusBar.Size = UDim2.new(1, -10, 0, 20)
+StatusBar.Position = UDim2.new(0, 5, 1, -24)
+StatusBar.BackgroundColor3 = C_TITLE
+StatusBar.BorderSizePixel = 0
+StatusBar.Font = Enum.Font.Gotham
+StatusBar.TextColor3 = C_TEXT_DIM
+StatusBar.TextSize = 11
+StatusBar.TextXAlignment = Enum.TextXAlignment.Left
+StatusBar.Text = " San sang..."
+StatusBar.Parent = MainFrame
+Instance.new("UICorner", StatusBar).CornerRadius = UDim.new(0, 6)
+
+-- Content
 local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1, -20, 1, -90)
+Content.Size = UDim2.new(1, -20, 1, -100)
 Content.Position = UDim2.new(0, 10, 0, 82)
 Content.BackgroundTransparency = 1
 Content.Parent = MainFrame
 
 -- ══ TAB SYSTEM ══
 local tabs = {}
-
 local function createTab(name)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 145, 0, 30)
@@ -164,22 +178,17 @@ local function createTab(name)
     btn.TextSize = 13
     btn.AutoButtonColor = false
     btn.Parent = TabBar
-    local bCorner = Instance.new("UICorner")
-    bCorner.CornerRadius = UDim.new(0, 6)
-    bCorner.Parent = btn
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
 
-    -- Dùng Frame thường thay vì ScrollingFrame
     local page = Instance.new("Frame")
     page.Size = UDim2.new(1, 0, 1, 0)
     page.BackgroundTransparency = 1
     page.Visible = false
     page.Parent = Content
-
     local layout = Instance.new("UIListLayout")
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Padding = UDim.new(0, 6)
     layout.Parent = page
-
     local pad = Instance.new("UIPadding")
     pad.PaddingTop = UDim.new(0, 2)
     pad.PaddingLeft = UDim.new(0, 2)
@@ -196,7 +205,6 @@ local function createTab(name)
         btn.TextColor3 = Color3.fromRGB(255, 255, 255)
         page.Visible = true
     end
-
     btn.MouseButton1Click:Connect(selectTab)
     table.insert(tabs, {btn = btn, page = page, select = selectTab})
     return page
@@ -224,9 +232,7 @@ local function createToggle(parent, text, callback, order)
     f.BorderSizePixel = 0
     f.LayoutOrder = order or 0
     f.Parent = parent
-    local fCorner = Instance.new("UICorner")
-    fCorner.CornerRadius = UDim.new(0, 6)
-    fCorner.Parent = f
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -60, 1, 0)
@@ -246,18 +252,14 @@ local function createToggle(parent, text, callback, order)
     toggleBtn.Text = ""
     toggleBtn.AutoButtonColor = false
     toggleBtn.Parent = f
-    local tCorner = Instance.new("UICorner")
-    tCorner.CornerRadius = UDim.new(1, 0)
-    tCorner.Parent = toggleBtn
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("Frame")
     knob.Size = UDim2.new(0, 18, 0, 18)
     knob.Position = UDim2.new(0, 3, 0.5, -9)
     knob.BackgroundColor3 = Color3.fromRGB(200, 200, 210)
     knob.Parent = toggleBtn
-    local kCorner = Instance.new("UICorner")
-    kCorner.CornerRadius = UDim.new(1, 0)
-    kCorner.Parent = knob
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
     local on = false
     toggleBtn.MouseButton1Click:Connect(function()
@@ -283,14 +285,12 @@ local function createSlider(parent, text, min, max, default, callback, order)
     f.BorderSizePixel = 0
     f.LayoutOrder = order or 0
     f.Parent = parent
-    local fCorner = Instance.new("UICorner")
-    fCorner.CornerRadius = UDim.new(0, 6)
-    fCorner.Parent = f
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -20, 0, 20)
     lbl.Position = UDim2.new(0, 12, 0, 6)
-    lbl.BackgroundTransparency = 1
+    lbl.BackgroundTransparency =  1
     lbl.Font = Enum.Font.Gotham
     lbl.TextColor3 = C_TEXT
     lbl.TextSize = 12
@@ -304,18 +304,14 @@ local function createSlider(parent, text, min, max, default, callback, order)
     bar.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
     bar.BorderSizePixel = 0
     bar.Parent = f
-    local bCorner = Instance.new("UICorner")
-    bCorner.CornerRadius = UDim.new(1, 0)
-    bCorner.Parent = bar
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
     fill.BackgroundColor3 = C_ACCENT
     fill.BorderSizePixel = 0
     fill.Parent = bar
-    local fillCorner = Instance.new("UICorner")
-    fillCorner.CornerRadius = UDim.new(1, 0)
-    fillCorner.Parent = fill
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
     local sld = false
     local function update(x)
@@ -325,22 +321,16 @@ local function createSlider(parent, text, min, max, default, callback, order)
         lbl.Text = text .. ": " .. tostring(val)
         if callback then callback(val) end
     end
-
     bar.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            sld = true
-            update(i.Position.X)
+            sld = true; update(i.Position.X)
         end
     end)
     UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            sld = false
-        end
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then sld = false end
     end)
     UserInputService.InputChanged:Connect(function(i)
-        if sld and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-            update(i.Position.X)
-        end
+        if sld and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then update(i.Position.X) end
     end)
     return f
 end
@@ -350,23 +340,24 @@ local farmTab = createTab("Auto Farm")
 local chestTab = createTab("Auto Chest")
 local flyTab = createTab("Fly")
 
--- ══ AUTO FARM TAB ══
+-- ══ FARM TAB ══
 createLabel(farmTab, "-- COMBAT --", 1)
 
 local autoFarm = false
 local autoQuest = false
+local autoIsland = false
 local useSkill = false
 local levelRange = 20
 
 createToggle(farmTab, "Auto Farm (Tim & danh NPC)", function(s) autoFarm = s end, 2)
 createToggle(farmTab, "Auto Quest (Nhan & hoan thanh)", function(s) autoQuest = s end, 3)
-createToggle(farmTab, "Auto XP & Beli", function(s) autoFarm = s end, 4)
+createToggle(farmTab, "Auto Chuyen Dao (Theo Level)", function(s) autoIsland = s end, 4)
 
 createLabel(farmTab, "-- SETTINGS --", 5)
 createSlider(farmTab, "Level Range (+/-)", 5, 50, 20, function(v) levelRange = v end, 6)
 createToggle(farmTab, "Dung Skill thay vi Melee", function(s) useSkill = s end, 7)
 
--- ══ AUTO CHEST TAB ══
+-- ══ CHEST TAB ══
 createLabel(chestTab, "-- CHEST FARMING --", 1)
 
 local autoChest = false
@@ -390,7 +381,6 @@ chestLbl.Parent = chestTab
 
 -- ══ FLY TAB ══
 createLabel(flyTab, "-- FLIGHT CONTROL --", 1)
-
 local flyOn = false
 local flySpeed = 50
 
@@ -398,7 +388,6 @@ createToggle(flyTab, "Bat Fly (WASD + Space/Ctrl)", function(s) flyOn = s end, 2
 createSlider(flyTab, "Toc do bay", 10, 300, 50, function(v) flySpeed = v end, 3)
 
 createLabel(flyTab, "-- HUONG DAN --", 4)
-
 local guide = Instance.new("TextLabel")
 guide.Size = UDim2.new(1, 0, 0, 80)
 guide.BackgroundTransparency = 1
@@ -412,10 +401,9 @@ guide.Text = "W: Tien | S: Lui\nA: Trai | D: Phai\nSpace: Len | Ctrl: Xuong\nTan
 guide.LayoutOrder = 5
 guide.Parent = flyTab
 
--- Select first tab
 tabs[1].select()
 
--- ══ LOGIC ══
+-- ══ UTILITY ══
 local function getChar()
     return LocalPlayer.Character
 end
@@ -432,55 +420,106 @@ local function getLevel()
     if d and d:FindFirstChild("Level") then return d.Level.Value end
     return 1
 end
-local function tweenTo(pos, speed)
-    speed = speed or 200
+
+-- CFrame teleport (instant, no flying)
+local function teleportTo(pos)
     local root = getRoot()
     if not root then return end
-    local dist = (root.Position - pos).Magnitude
-    local t = math.clamp(dist / speed, 0.1, 8)
-    local tw = TweenService:Create(root, TweenInfo.new(t, Enum.EasingStyle.Linear), {CFrame = CFrame.new(pos)})
-    tw:Play()
-    return tw
+    root.CFrame = CFrame.new(pos)
 end
 
+-- Walk to position (ground movement)
+local function walkTo(pos, timeout)
+    timeout = timeout or 5
+    local hum = getHum()
+    local root = getRoot()
+    if not hum or not root then return false end
+    hum:MoveTo(pos)
+    local start = tick()
+    while tick() - start < timeout do
+        local r = getRoot()
+        if not r then return false end
+        local dist = (r.Position - pos).Magnitude
+        if dist < 5 then return true end
+        task.wait(0.1)
+    end
+    return false
+end
+
+-- ══ ENEMY DETECTION ══
 local function getBestNPC()
-    local best, bestScore = nil, math.huge
     local myLvl = getLevel()
     local root = getRoot()
     if not root then return nil end
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") then
-            local hum = obj:FindFirstChildOfClass("Humanoid")
-            local r = obj:FindFirstChild("HumanoidRootPart")
-            if hum and r and hum.Health > 0 and not Players:GetPlayerFromCharacter(obj) then
-                local el = obj:FindFirstChild("Level") and obj.Level.Value or 1
-                if el <= myLvl + levelRange and el >= myLvl - levelRange then
-                    local d = (root.Position - r.Position).Magnitude
-                    local s = d - (el * 2)
-                    if s < bestScore then bestScore = s; best = obj end
+
+    local best, bestDist = nil, math.huge
+
+    -- Check Workspace.Enemies (Blox Fruits standard)
+    local containers = {
+        Workspace:FindFirstChild("Enemies"),
+        Workspace:FindFirstChild("Enemy"),
+        Workspace,
+    }
+
+    for _, container in ipairs(containers) do
+        if container then
+            for _, obj in ipairs(container:GetChildren()) do
+                if obj:IsA("Model") then
+                    local hum = obj:FindFirstChildOfClass("Humanoid")
+                    local r = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso") or obj:FindFirstChild("UpperTorso")
+                    if hum and r and hum.Health > 0 and not Players:GetPlayerFromCharacter(obj) then
+                        -- Get enemy level
+                        local el = 1
+                        local lvlObj = obj:FindFirstChild("Level")
+                        if lvlObj then
+                            if lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") then
+                                el = lvlObj.Value
+                            elseif lvlObj:IsA("TextLabel") then
+                                el = tonumber(lvlObj.Text:match("%d+")) or 1
+                            end
+                        end
+
+                        -- Check level range
+                        if el <= myLvl + levelRange and el >= myLvl - levelRange - 10 then
+                            local d = (root.Position - r.Position).Magnitude
+                            -- Prefer higher level enemies that are closer
+                            local score = d - (el * 1.5)
+                            if score < bestDist then
+                                bestDist = score
+                                best = obj
+                            end
+                        end
+                    end
                 end
             end
         end
     end
-    return best
-end
 
-local function getNearestChest()
-    local best, bestDist = nil, math.huge
-    local root = getRoot()
-    if not root then return nil end
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if (obj:IsA("Model") or obj:IsA("Part")) and obj.Name:lower():match("chest") then
-            local p = obj:IsA("Part") and obj or obj:FindFirstChildWhichIsA("Part")
-            if p then
-                local d = (root.Position - p.Position).Magnitude
-                if d < bestDist then bestDist = d; best = obj end
+    -- If nothing in range, search wider (remove level restriction)
+    if not best then
+        for _, container in ipairs(containers) do
+            if container then
+                for _, obj in ipairs(container:GetChildren()) do
+                    if obj:IsA("Model") then
+                        local hum = obj:FindFirstChildOfClass("Humanoid")
+                        local r = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso")
+                        if hum and r and hum.Health > 0 and not Players:GetPlayerFromCharacter(obj) then
+                            local d = (root.Position - r.Position).Magnitude
+                            if d < bestDist then
+                                bestDist = d
+                                best = obj
+                            end
+                        end
+                    end
+                end
             end
         end
     end
+
     return best
 end
 
+-- ══ ATTACK NPC ══
 local vUser, vInput
 pcall(function() vUser = game:GetService("VirtualUser") end)
 pcall(function() vInput = game:GetService("VirtualInputManager") end)
@@ -488,18 +527,32 @@ pcall(function() vInput = game:GetService("VirtualInputManager") end)
 local function attackNPC(target)
     if not target then return end
     local hum = target:FindFirstChildOfClass("Humanoid")
-    local root = target:FindFirstChild("HumanoidRootPart")
+    local root = target:FindFirstChild("HumanoidRootPart") or target:FindFirstChild("Torso")
     if not hum or not root or hum.Health <= 0 then return end
+
     local myRoot = getRoot()
     local myHum = getHum()
     if not myRoot or not myHum then return end
+
     local d = (myRoot.Position - root.Position).Magnitude
-    if d > 12 then
-        tweenTo(root.Position + Vector3.new(0, 5, 0), 250)
+
+    -- If far, teleport close (CFrame, not tween)
+    if d > 20 then
+        teleportTo(root.Position + Vector3.new(0, 5, 0))
         task.wait(0.1)
         return
     end
-    myRoot.CFrame = CFrame.lookAt(myRoot.Position, root.Position)
+
+    -- If mid-range, walk to enemy
+    if d > 8 then
+        walkTo(root.Position, 2)
+        return
+    end
+
+    -- In attack range - face the enemy
+    myRoot.CFrame = CFrame.lookAt(myRoot.Position, Vector3.new(root.Position.X, myRoot.Position.Y, root.Position.Z))
+
+    -- Melee attack
     if vUser then
         pcall(function()
             vUser:CaptureController()
@@ -508,6 +561,8 @@ local function attackNPC(target)
             vUser:Button1Up(Vector2.new())
         end)
     end
+
+    -- Tool attack
     local tool = getChar():FindFirstChildOfClass("Tool")
     if tool then
         pcall(function() tool:Activate() end)
@@ -524,8 +579,10 @@ local function attackNPC(target)
             end
         end
     end
+
+    -- Skill attacks
     if useSkill and vInput then
-        for _, key in ipairs({Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C}) do
+        for _, key in ipairs({Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V, Enum.KeyCode.F}) do
             pcall(function()
                 vInput:SendKeyEvent(true, key, false, game)
                 task.wait(0.05)
@@ -535,78 +592,226 @@ local function attackNPC(target)
     end
 end
 
-local function handleQuest()
+-- ══ QUEST SYSTEM ══
+local function getQuestGiver()
     local root = getRoot()
-    if not root then return end
+    if not root then return nil end
+
+    -- Search for quest NPCs
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name:lower():match("quest") then
-            local part = obj:FindFirstChildWhichIsA("Part") or obj:FindFirstChild("HumanoidRootPart")
-            if part then
-                local d = (root.Position - part.Position).Magnitude
-                if d > 15 then
-                    tweenTo(part.Position + Vector3.new(0, 3, 0), 200)
-                    task.wait(0.2)
-                    return
+        if obj:IsA("Model") then
+            local name = obj.Name:lower()
+            if name:match("quest") or name:match("giver") or name:match("npc") then
+                -- Skip player characters
+                if not Players:GetPlayerFromCharacter(obj) then
+                    local part = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("Part")
+                    if part then
+                        local d = (root.Position - part.Position).Magnitude
+                        if d < 2000 then
+                            return obj, part
+                        end
+                    end
                 end
-                local prompt = part:FindFirstChildOfClass("ProximityPrompt") or obj:FindFirstChildOfClass("ProximityPrompt")
-                if prompt then
-                    pcall(function() fireproximityprompt(prompt) end)
-                else
-                    pcall(function()
-                        game:GetService("ReplicatedStorage").Remotes.Communicator:InvokeServer("StartQuest")
-                    end)
-                end
-                return
             end
         end
     end
-end
 
--- ══ LOOPS ══
-task.spawn(function()
-    while task.wait(0.1) do
-        if autoFarm then
-            pcall(function()
-                if autoQuest then handleQuest() end
-                local npc = getBestNPC()
-                if npc then attackNPC(npc) end
-            end)
+    -- Also check for ProximityPrompts with quest
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then
+            local promptName = obj.ObjectText or ""
+            if promptName:lower():match("quest") or promptName:lower():match("nhiem") then
+                local parent = obj.Parent
+                local part = parent and (parent:FindFirstChildWhichIsA("Part") or parent:FindFirstChild("HumanoidRootPart"))
+                if part then
+                    local d = (root.Position - part.Position).Magnitude
+                    if d < 2000 then
+                        return parent, part
+                    end
+                end
+            end
         end
     end
-end)
 
-task.spawn(function()
-    while task.wait(0.3) do
-        if autoChest then
-            pcall(function()
-                local chest = getNearestChest()
-                if chest then
-                    local p = chest:IsA("Part") and chest or chest:FindFirstChildWhichIsA("Part")
+    return nil
+end
+
+local function handleQuest()
+    local root = getRoot()
+    if not root then return end
+
+    local questGiver, questPart = getQuestGiver()
+    if not questGiver or not questPart then return end
+
+    local d = (root.Position - questPart.Position).Magnitude
+
+    -- Teleport close if far
+    if d > 50 then
+        teleportTo(questPart.Position + Vector3.new(0, 3, 0))
+        task.wait(0.2)
+        return
+    end
+
+    -- Walk to quest giver
+    if d > 5 then
+        walkTo(questPart.Position, 3)
+        return
+    end
+
+    -- Accept quest via ProximityPrompt
+    local prompt = questGiver:FindFirstChildOfClass("ProximityPrompt") or questPart:FindFirstChildOfClass("ProximityPrompt")
+    if prompt then
+        pcall(function() fireproximityprompt(prompt) end)
+        task.wait(0.3)
+    end
+
+    -- Also try remote (Blox Fruits specific)
+    pcall(function()
+        game:GetService("ReplicatedStorage").Remotes.Communicator:InvokeServer("StartQuest")
+    end)
+    pcall(function()
+        game:GetService("ReplicatedStorage").Remotes.Communicator:InvokeServer("AcceptQuest")
+    end)
+end
+
+-- ══ ISLAND ROTATION ══
+local currentIslandIdx = 1
+local function checkIslandRotation()
+    if not autoIsland then return end
+
+    local myLv = getLevel()
+    local target = getTargetIsland()
+    local root = getRoot()
+    if not root then return end
+
+    -- Check if we need to move to a new island
+    local shouldChange = false
+    for i, island in ipairs(islands) do
+        if i > currentIslandIdx and myLv >= island.minLv then
+            shouldChange = true
+            currentIslandIdx = i
+        end
+    end
+
+    if shouldChange then
+        StatusBar.Text = " Dang chuyen dao: " .. target.name .. "..."
+        teleportTo(target.pos)
+        task.wait(1)
+        -- Accept quest on new island
+        if autoQuest then
+            handleQuest()
+            task.wait(0.5)
+        end
+        StatusBar.Text = " Da den: " .. target.name
+    end
+end
+
+-- ══ CHEST DETECTION (FIXED) ══
+local function getAllChests()
+    local chests = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if (obj:IsA("Model") or obj:IsA("Part")) then
+            local name = obj.Name:lower()
+            if name:match("chest") or name:match("ruong") or name:match("box") or name:match("crate") then
+                local part = obj:IsA("Part") and obj or obj:FindFirstChildWhichIsA("Part")
+                if part then
                     local root = getRoot()
-                    if p and root then
-                        local d = (root.Position - p.Position).Magnitude
-                        if d > 5 then
-                            local tw = tweenTo(p.Position + Vector3.new(0, 3, 0), 300)
-                            if tw then tw.Completed:Wait() end
-                            task.wait(0.2)
-                        end
-                        local prompt = p:FindFirstChildOfClass("ProximityPrompt") or chest:FindFirstChildOfClass("ProximityPrompt")
-                        if prompt then
-                            pcall(function() fireproximityprompt(prompt) end)
-                        else
-                            pcall(function() root.CFrame = CFrame.new(p.Position); task.wait(0.3) end)
-                        end
-                        chestCount = chestCount + 1
-                        chestLbl.Text = "Ruong da thu: " .. tostring(chestCount)
-                        task.wait(0.5)
+                    if root then
+                        local d = (root.Position - part.Position).Magnitude
+                        table.insert(chests, {model = obj, part = part, dist = d})
                     end
+                end
+            end
+        end
+    end
+
+    -- Sort by distance
+    table.sort(chests, function(a, b) return a.dist < b.dist end)
+    return chests
+end
+
+-- ══ FARM LOOP ══
+task.spawn(function()
+    while task.wait(0.15) do
+        if autoFarm then
+            pcall(function()
+                local root = getRoot()
+                local hum = getHum()
+                if not root or not hum or hum.Health <= 0 then return end
+
+                -- Check island rotation first
+                checkIslandRotation()
+
+                -- Handle quest
+                if autoQuest then
+                    handleQuest()
+                end
+
+                -- Find and attack nearest NPC
+                local npc = getBestNPC()
+                if npc then
+                    local npcName = npc.Name
+                    StatusBar.Text = " Dang farm: " .. npcName
+                    attackNPC(npc)
+                else
+                    StatusBar.Text = " Khong tim thay NPC, dang tim..."
+                    -- Walk around to find enemies
+                    local island = getTargetIsland()
+                    teleportTo(island.pos + Vector3.new(math.random(-50, 50), 10, math.random(-50, 50)))
+                    task.wait(0.5)
                 end
             end)
         end
     end
 end)
 
--- ══ FLY ══
+-- ══ CHEST LOOP (FIXED) ══
+task.spawn(function()
+    while task.wait(0.5) do
+        if autoChest then
+            pcall(function()
+                local root = getRoot()
+                if not root then return end
+
+                local chests = getAllChests()
+                if #chests > 0 then
+                    local chest = chests[1] -- Nearest chest
+                    local d = (root.Position - chest.part.Position).Magnitude
+
+                    StatusBar.Text = " Dang tim ruong... (" .. #chests .. " tim thay)"
+
+                    -- Teleport to chest if far
+                    if d > 10 then
+                        teleportTo(chest.part.Position + Vector3.new(0, 3, 0))
+                        task.wait(0.3)
+                    end
+
+                    -- Collect chest
+                    local prompt = chest.model:FindFirstChildOfClass("ProximityPrompt") or chest.part:FindFirstChildOfClass("ProximityPrompt")
+                    if prompt then
+                        pcall(function() fireproximityprompt(prompt) end)
+                    else
+                        -- Touch chest
+                        pcall(function()
+                            root.CFrame = CFrame.new(chest.part.Position)
+                            task.wait(0.3)
+                        end)
+                    end
+
+                    chestCount = chestCount + 1
+                    chestLbl.Text = "Ruong da thu: " .. tostring(chestCount)
+                    StatusBar.Text = " Da thu ruong #" .. chestCount
+                    task.wait(0.5)
+                else
+                    StatusBar.Text = " Khong con ruong, dang cho respawn..."
+                    task.wait(2)
+                end
+            end)
+        end
+    end
+end)
+
+-- ══ FLY SYSTEM ══
 local flyVel, flyGyro
 local keys = {W=false, A=false, S=false, D=false, Space=false, Ctrl=false}
 
@@ -690,10 +895,10 @@ end)
 -- ══ INIT ══
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Blox Hub",
-        Text = "Script loaded thanh cong!",
-        Duration = 3
+        Title = "Blox Hub v4",
+        Text = "Script loaded! Fix movement, chest, island rotation!",
+        Duration = 4
     })
 end)
 
-print("[Blox Hub] Loaded successfully!")
+print("[Blox Hub v4] Loaded successfully!")
